@@ -186,14 +186,14 @@ export default function HomePage() {
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
               {categories?.data?.slice(0, 12).map((category, index) => (
                 <Link
-                  key={category}
-                  href={`/products?category=${encodeURIComponent(category)}`}
+                  key={category.id}
+                  href={`/products?category=${encodeURIComponent(category.slug)}`}
                   className="group"
                 >
                   <Card className="h-24 flex items-center justify-center hover:shadow-lg transition-all duration-200 group-hover:scale-105">
                     <CardContent className="text-center">
                       <div className="text-sm font-medium text-gray-900 group-hover:text-primary">
-                        {category}
+                        {category.name}
                       </div>
                     </CardContent>
                   </Card>
@@ -235,8 +235,8 @@ export default function HomePage() {
                 <Card key={product.id} className="group overflow-hidden hover:shadow-lg transition-all duration-200">
                   <div className="relative aspect-square overflow-hidden">
                     <Image
-                      src={product.images[0] || '/placeholder-product.jpg'}
-                      alt={product.title}
+                      src={product.images[0]?.url || '/placeholder-product.jpg'}
+                      alt={product.images[0]?.alt || product.title}
                       fill
                       className="object-cover group-hover:scale-105 transition-transform duration-200"
                     />

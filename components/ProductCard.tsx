@@ -68,8 +68,8 @@ export function ProductCard({
       <Card className="flex flex-row overflow-hidden hover:shadow-lg transition-shadow">
         <div className="relative w-48 h-48 flex-shrink-0">
           <Image
-            src={product.images[0] || '/placeholder-product.jpg'}
-            alt={product.title}
+            src={product.images[0]?.url || '/placeholder-product.jpg'}
+            alt={product.images[0]?.alt || product.title}
             fill
             className="object-cover"
           />
@@ -143,8 +143,8 @@ export function ProductCard({
       <Link href={`/products/${product.id}`}>
         <div className="relative aspect-square overflow-hidden">
           <Image
-            src={product.images[0] || '/placeholder-product.jpg'}
-            alt={product.title}
+            src={product.images[0]?.url || '/placeholder-product.jpg'}
+            alt={product.images[0]?.alt || product.title}
             fill
             className="object-cover group-hover:scale-105 transition-transform duration-200"
           />

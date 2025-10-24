@@ -116,7 +116,7 @@ export function useAuth() {
 // Higher-order component for protected routes
 export function withAuth<P extends object>(
   Component: React.ComponentType<P>,
-  requiredRole?: 'admin' | 'seller' | 'buyer'
+  requiredRole?: 'ADMIN' | 'SELLER' | 'BUYER'
 ) {
   return function AuthenticatedComponent(props: P) {
     const { user, isLoading } = useAuth()
@@ -142,7 +142,7 @@ export function withAuth<P extends object>(
       )
     }
 
-    if (requiredRole && user.role !== requiredRole && user.role !== 'admin') {
+    if (requiredRole && user.role !== requiredRole && user.role !== 'ADMIN') {
       return (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
@@ -166,7 +166,7 @@ export function RoleGate({
   fallback 
 }: { 
   children: React.ReactNode
-  allowedRoles: ('admin' | 'seller' | 'buyer')[]
+  allowedRoles: ('ADMIN' | 'SELLER' | 'BUYER')[]
   fallback?: React.ReactNode
 }) {
   const { user } = useAuth()

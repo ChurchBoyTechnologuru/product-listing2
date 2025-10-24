@@ -39,11 +39,11 @@ export default function DashboardPage() {
 
   const getDashboardContent = () => {
     switch (user.role) {
-      case 'admin':
+      case 'ADMIN':
         return <AdminDashboard />
-      case 'seller':
+      case 'SELLER':
         return <SellerDashboard />
-      case 'buyer':
+      case 'BUYER':
         return <BuyerDashboard />
       default:
         return <DefaultDashboard />

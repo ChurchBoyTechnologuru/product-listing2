@@ -71,11 +71,11 @@ export function TopNav() {
   const getRoleNavigation = () => {
     if (!user) return []
     switch (user.role) {
-      case 'admin':
+      case 'ADMIN':
         return adminNavigation
-      case 'seller':
+      case 'SELLER':
         return sellerNavigation
-      case 'buyer':
+      case 'BUYER':
         return buyerNavigation
       default:
         return []

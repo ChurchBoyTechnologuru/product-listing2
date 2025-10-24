@@ -136,8 +136,8 @@ export default function ProductDetailPage() {
           <div className="space-y-4">
             <div className="aspect-square bg-white rounded-lg overflow-hidden">
               <Image
-                src={productData.images[selectedImage] || '/placeholder-product.jpg'}
-                alt={productData.title}
+                src={productData.images[selectedImage]?.url || '/placeholder-product.jpg'}
+                alt={productData.images[selectedImage]?.alt || productData.title}
                 width={600}
                 height={600}
                 className="w-full h-full object-cover"
@@ -153,8 +153,8 @@ export default function ProductDetailPage() {
                   }`}
                 >
                   <Image
-                    src={image}
-                    alt={`${productData.title} ${index + 1}`}
+                    src={image.url}
+                    alt={image.alt || `${productData.title} ${index + 1}`}
                     width={150}
                     height={150}
                     className="w-full h-full object-cover"

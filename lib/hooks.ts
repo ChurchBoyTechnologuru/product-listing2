@@ -2,6 +2,7 @@
 
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   productsApi, 
@@ -19,7 +20,10 @@ import {
   DashboardStats,
   SalesChart,
   TopProduct,
-  User
+  User,
+  ProductForm,
+  Address,
+  Role
 } from './types'
 
 // Products hooks
@@ -56,6 +60,14 @@ export function useProductCategories() {
   return useQuery({
     queryKey: ['products', 'categories'],
     queryFn: () => productsApi.getCategories(),
+    staleTime: 30 * 60 * 1000, // 30 minutes
+  })
+}
+
+export function useProductCategoriesByType(isService?: boolean) {
+  return useQuery({
+    queryKey: ['products', 'categories', isService],
+    queryFn: () => productsApi.getCategoriesByType(isService),
     staleTime: 30 * 60 * 1000, // 30 minutes
   })
 }

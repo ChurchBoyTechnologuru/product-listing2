@@ -15,7 +15,13 @@ import {
   CheckoutForm,
   DashboardStats,
   SalesChart,
-  TopProduct
+  TopProduct,
+  Shop,
+  BankDetails,
+  Review,
+  Address,
+  Role,
+  Category
 } from './types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api'
@@ -176,8 +182,16 @@ export const productsApi = {
     return request('/products/featured')
   },
 
-  getCategories: async (): Promise<ApiResponse<string[]>> => {
+  getCategories: async (): Promise<ApiResponse<Category[]>> => {
     return request('/products/categories')
+  },
+
+  getCategoriesByType: async (isService?: boolean): Promise<ApiResponse<Category[]>> => {
+    const params = new URLSearchParams()
+    if (isService !== undefined) {
+      params.append('isService', isService.toString())
+    }
+    return request(`/products/categories?${params}`)
   },
 }
 

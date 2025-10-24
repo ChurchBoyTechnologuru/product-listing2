@@ -3,7 +3,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ProductFilters } from '@/lib/types'
+import { ProductFilters, Category } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -21,7 +21,7 @@ import {
 interface FiltersPanelProps {
   filters: ProductFilters
   onFiltersChange: (filters: ProductFilters) => void
-  categories: string[]
+  categories: Category[]
   onClose?: () => void
 }
 
@@ -123,16 +123,16 @@ export function FiltersPanel({
         </CardHeader>
         <CardContent className="pt-0 space-y-2">
           {categories.map((category) => (
-            <label key={category} className="flex items-center space-x-2">
+            <label key={category.id} className="flex items-center space-x-2">
               <input
                 type="radio"
                 name="category"
-                value={category}
-                checked={localFilters.category === category}
+                value={category.slug}
+                checked={localFilters.category === category.slug}
                 onChange={(e) => handleFilterChange('category', e.target.value)}
                 className="rounded border-gray-300 text-primary focus:ring-primary"
               />
-              <span className="text-sm">{category}</span>
+              <span className="text-sm">{category.name}</span>
             </label>
           ))}
         </CardContent>

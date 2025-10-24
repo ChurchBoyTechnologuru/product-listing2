@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
@@ -36,14 +36,36 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
   })
+
+  // Load saved credentials on component mount
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('saved_email')
+    const rememberMe = localStorage.getItem('remember_me')
+    
+    if (savedEmail && rememberMe === 'true') {
+      setValue('email', savedEmail)
+      setValue('remember', true)
+    }
+  }, [setValue])
 
   const onSubmit = async (data: LoginForm) => {
     setIsLoading(true)
     try {
       await login(data)
+      
+      // Save credentials if "Remember me" is checked
+      if (data.remember) {
+        localStorage.setItem('saved_email', data.email)
+        localStorage.setItem('remember_me', 'true')
+      } else {
+        localStorage.removeItem('saved_email')
+        localStorage.removeItem('remember_me')
+      }
+      
       toast({
         title: 'Welcome back!',
         description: 'You have successfully logged in.',

@@ -23,7 +23,7 @@ const registerSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
-  role: z.enum(['buyer', 'seller'], {
+  role: z.enum(['BUYER', 'SELLER'], {
     required_error: 'Please select a role',
   }),
   acceptTerms: z.boolean().refine(val => val === true, 'You must accept the terms and conditions'),
@@ -43,7 +43,7 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  const defaultRole = searchParams.get('role') as 'buyer' | 'seller' | null
+  const defaultRole = searchParams.get('role') as 'BUYER' | 'SELLER' | null
 
   const {
     register,
@@ -53,7 +53,7 @@ export default function RegisterPage() {
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      role: defaultRole || 'buyer',
+      role: defaultRole || 'BUYER',
     },
   })
 
@@ -80,7 +80,7 @@ export default function RegisterPage() {
   }
 
   const roleBenefits = {
-    buyer: [
+    BUYER: [
       'Access to global products',
       'Secure payment processing',
       'Buyer protection program',
@@ -88,7 +88,7 @@ export default function RegisterPage() {
       'Price comparison tools',
       'Wishlist and favorites'
     ],
-    seller: [
+    SELLER: [
       'Global customer reach',
       'Advanced analytics dashboard',
       'Inventory management tools',
@@ -225,12 +225,12 @@ export default function RegisterPage() {
                     <label className="relative">
                       <input
                         type="radio"
-                        value="buyer"
+                        value="BUYER"
                         {...register('role')}
                         className="sr-only"
                       />
                       <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                        selectedRole === 'buyer'
+                        selectedRole === 'BUYER'
                           ? 'border-primary bg-primary/5'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}>
@@ -243,12 +243,12 @@ export default function RegisterPage() {
                     <label className="relative">
                       <input
                         type="radio"
-                        value="seller"
+                        value="SELLER"
                         {...register('role')}
                         className="sr-only"
                       />
                       <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                        selectedRole === 'seller'
+                        selectedRole === 'SELLER'
                           ? 'border-primary bg-primary/5'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}>
@@ -303,14 +303,14 @@ export default function RegisterPage() {
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Badge variant="secondary" className="mr-2">
-                    {selectedRole === 'seller' ? 'Seller' : 'Buyer'}
+                    {selectedRole === 'SELLER' ? 'Seller' : 'Buyer'}
                   </Badge>
                   Benefits
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {roleBenefits[selectedRole || 'buyer'].map((benefit, index) => (
+                  {roleBenefits[selectedRole || 'BUYER'].map((benefit, index) => (
                     <div key={index} className="flex items-center space-x-3">
                       <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
                       <span className="text-sm text-gray-700">{benefit}</span>

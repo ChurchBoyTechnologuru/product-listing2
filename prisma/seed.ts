@@ -1,11 +1,16 @@
 // Database seed file with sample data for development
 
 import { PrismaClient, Role, ProductStatus, OrderStatus, PayoutStatus, VerificationState, DocumentType, BusinessType } from '@prisma/client'
+import { PRODUCT_CATEGORIES, SERVICE_CATEGORIES } from '../lib/categories'
 
 const prisma = new PrismaClient()
 
 async function main() {
   console.log('🌱 Seeding database...')
+
+  // Create categories first
+  console.log('📂 Creating categories...')
+  await createCategories()
 
   // Create admin user
   const admin = await prisma.user.upsert({
@@ -14,6 +19,7 @@ async function main() {
     create: {
       email: 'admin@marketplace.com',
       name: 'Admin User',
+      password: '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJvJdH8qJ8qJ8qJ8qJ8q', // password123
       role: Role.ADMIN,
       isEmailVerified: true,
       avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face',
@@ -27,6 +33,7 @@ async function main() {
     create: {
       email: 'john@seller.com',
       name: 'John Smith',
+      password: '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJvJdH8qJ8qJ8qJ8qJ8q', // password123
       role: Role.SELLER,
       isEmailVerified: true,
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
@@ -40,6 +47,7 @@ async function main() {
     create: {
       email: 'maria@seller.com',
       name: 'Maria Garcia',
+      password: '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJvJdH8qJ8qJ8qJ8qJ8q', // password123
       role: Role.SELLER,
       isEmailVerified: true,
       avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?w=150&h=150&fit=crop&crop=face',
@@ -53,6 +61,7 @@ async function main() {
     create: {
       email: 'kenji@seller.com',
       name: 'Kenji Tanaka',
+      password: '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJvJdH8qJ8qJ8qJ8qJ8q', // password123
       role: Role.SELLER,
       isEmailVerified: true,
       avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&h=150&fit=crop&crop=face',
@@ -67,6 +76,7 @@ async function main() {
     create: {
       email: 'alice@buyer.com',
       name: 'Alice Johnson',
+      password: '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJvJdH8qJ8qJ8qJ8qJ8q', // password123
       role: Role.BUYER,
       isEmailVerified: true,
       avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150&h=150&fit=crop&crop=face',
@@ -80,6 +90,7 @@ async function main() {
     create: {
       email: 'david@buyer.com',
       name: 'David Wilson',
+      password: '$2a$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJvJdH8qJ8qJ8qJ8qJ8q', // password123
       role: Role.BUYER,
       isEmailVerified: true,
       avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&h=150&fit=crop&crop=face',
@@ -134,7 +145,7 @@ async function main() {
       rating: 4.8,
       totalSales: 1250,
       ownerId: seller1.id,
-      location: { connect: { id: seller1Address.id } },
+      locationId: seller1Address.id,
     },
   })
 
@@ -149,7 +160,7 @@ async function main() {
       rating: 4.6,
       totalSales: 890,
       ownerId: seller2.id,
-      location: { connect: { id: seller2Address.id } },
+      locationId: seller2Address.id,
     },
   })
 
@@ -164,7 +175,7 @@ async function main() {
       rating: 4.9,
       totalSales: 340,
       ownerId: seller3.id,
-      location: { connect: { id: seller3Address.id } },
+      locationId: seller3Address.id,
     },
   })
 
@@ -300,8 +311,19 @@ async function main() {
   ]
 
   for (const productData of products) {
-    await prisma.product.create({
-      data: productData,
+    const { images, ...productWithoutImages } = productData
+    const product = await prisma.product.create({
+      data: {
+        ...productWithoutImages,
+        images: {
+          create: images.map((url, index) => ({
+            url,
+            alt: `${productData.title} image ${index + 1}`,
+            isPrimary: index === 0,
+            order: index
+          }))
+        }
+      },
     })
   }
 
@@ -433,6 +455,79 @@ async function main() {
   console.log(`🏪 Created ${await prisma.shop.count()} shops`)
   console.log(`📦 Created ${await prisma.product.count()} products`)
   console.log(`⭐ Created ${await prisma.review.count()} reviews`)
+  console.log(`📂 Created ${await prisma.category.count()} categories`)
+}
+
+async function createCategories() {
+  // Create product categories
+  for (const category of PRODUCT_CATEGORIES) {
+    const createdCategory = await prisma.category.upsert({
+      where: { slug: category.slug },
+      update: {},
+      create: {
+        name: category.name,
+        slug: category.slug,
+        description: category.description,
+        icon: category.icon,
+        isService: false,
+        isActive: true,
+      },
+    })
+
+    // Create subcategories
+    if (category.children) {
+      for (const subcategory of category.children) {
+        await prisma.category.upsert({
+          where: { slug: subcategory.slug },
+          update: {},
+          create: {
+            name: subcategory.name,
+            slug: subcategory.slug,
+            description: subcategory.description,
+            icon: subcategory.icon,
+            parentId: createdCategory.id,
+            isService: false,
+            isActive: true,
+          },
+        })
+      }
+    }
+  }
+
+  // Create service categories
+  for (const category of SERVICE_CATEGORIES) {
+    const createdCategory = await prisma.category.upsert({
+      where: { slug: category.slug },
+      update: {},
+      create: {
+        name: category.name,
+        slug: category.slug,
+        description: category.description,
+        icon: category.icon,
+        isService: true,
+        isActive: true,
+      },
+    })
+
+    // Create subcategories
+    if (category.children) {
+      for (const subcategory of category.children) {
+        await prisma.category.upsert({
+          where: { slug: subcategory.slug },
+          update: {},
+          create: {
+            name: subcategory.name,
+            slug: subcategory.slug,
+            description: subcategory.description,
+            icon: subcategory.icon,
+            parentId: createdCategory.id,
+            isService: true,
+            isActive: true,
+          },
+        })
+      }
+    }
+  }
 }
 
 main()

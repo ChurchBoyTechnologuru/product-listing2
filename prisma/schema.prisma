@@ -13,6 +13,7 @@ model User {
   id              String   @id @default(cuid())
   email           String   @unique
   name            String
+  password        String   // Hashed password
   role            Role     @default(BUYER)
   avatar          String?
   phone           String?
@@ -29,8 +30,30 @@ model User {
   cartItems       CartItem[]
   payouts         Payout[]
   documents       Document[]
+  businessInfo    BusinessInfo?
+  bankDetails     BankDetails[]
 
   @@map("users")
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  description String?
+  icon        String?
+  parentId    String?
+  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  isService   Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  products    Product[]
+
+  @@map("categories")
 }
 
 model Shop {
@@ -47,9 +70,10 @@ model Shop {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  ownerId     String
+  ownerId     String   @unique
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  location    Address  @relation("ShopAddress")
+  locationId  String   @unique
+  location    Address  @relation("ShopAddress", fields: [locationId], references: [id])
   products    Product[]
   orders      Order[]  @relation("ShopOrders")
 
@@ -85,13 +109,16 @@ model Product {
   currency    String        @default("USD")
   category    String
   subcategory String?
-  images      String[]
+  categoryId  String?
+  categoryRef Category?     @relation(fields: [categoryId], references: [id])
+  images      ProductImage[]
   stock       Int           @default(0)
   sku         String?
   weight      Float?
   dimensions  Json?         // {length, width, height}
   status      ProductStatus @default(DRAFT)
   isActive    Boolean       @default(true)
+  isService   Boolean       @default(false)
   tags        String[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
@@ -109,6 +136,21 @@ model Product {
   totalReviews  Int   @default(0)
 
   @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  url       String
+  alt       String?
+  isPrimary Boolean  @default(false)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  // Relations
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
 }
 
 model ShippingOption {
@@ -171,7 +213,8 @@ model Order {
   billingAddressId  String
   billingAddress  Address     @relation("BillingAddress", fields: [billingAddressId], references: [id])
   items           OrderItem[]
-  shippingOption  ShippingOption?
+  shippingOptionId String?
+  shippingOption  ShippingOption? @relation(fields: [shippingOptionId], references: [id])
 
   @@map("orders")
 }
@@ -220,7 +263,8 @@ model Payout {
   // Relations
   sellerId    String
   seller      User       @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  bankDetails BankDetails
+  bankDetailsId String
+  bankDetails BankDetails @relation(fields: [bankDetailsId], references: [id])
 
   @@map("payouts")
 }
@@ -269,7 +313,7 @@ model BusinessInfo {
   updatedAt          DateTime @updatedAt
 
   // Relations
-  userId             String
+  userId             String  @unique
   user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("business_info")

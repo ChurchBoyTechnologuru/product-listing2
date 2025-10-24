@@ -1,6 +1,6 @@
 // Core TypeScript types and interfaces for the international marketplace
 
-export type Role = 'admin' | 'seller' | 'buyer'
+export type Role = 'ADMIN' | 'SELLER' | 'BUYER'
 
 export type VerificationState = 'pending' | 'verified' | 'rejected'
 
@@ -12,6 +12,7 @@ export interface User {
   id: string
   email: string
   name: string
+  password: string
   role: Role
   avatar?: string
   phone?: string
@@ -88,7 +89,9 @@ export interface Product {
   currency: string
   category: string
   subcategory?: string
-  images: string[]
+  categoryId?: string
+  categoryRef?: Category
+  images: ProductImage[]
   stock: number
   sku?: string
   weight?: number
@@ -99,6 +102,7 @@ export interface Product {
   }
   status: ProductStatus
   isActive: boolean
+  isService: boolean
   tags: string[]
   shippingOptions: ShippingOption[]
   createdAt: string
@@ -108,6 +112,31 @@ export interface Product {
   reviews: Review[]
   averageRating: number
   totalReviews: number
+}
+
+export interface Category {
+  id: string
+  name: string
+  slug: string
+  description?: string
+  icon?: string
+  parentId?: string
+  parent?: Category
+  children?: Category[]
+  isService: boolean
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProductImage {
+  id: string
+  url: string
+  alt?: string
+  isPrimary: boolean
+  order: number
+  createdAt: string
+  productId: string
 }
 
 export interface ShippingOption {
