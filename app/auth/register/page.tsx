@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
@@ -49,6 +49,7 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     watch,
+    control,
     formState: { errors },
   } = useForm<RegisterForm>({
     resolver: zodResolver(registerSchema),
@@ -62,13 +63,22 @@ export default function RegisterPage() {
   const onSubmit = async (data: RegisterForm) => {
     setIsLoading(true)
     try {
+      console.log('Starting registration for:', data.email)
       await registerUser(data)
+
+      console.log('Registration successful, redirecting to dashboard...')
+
       toast({
         title: 'Account created successfully!',
-        description: 'Welcome to our marketplace. You can now start exploring.',
+        description: 'Welcome to our marketplace!',
       })
+
+      // Redirect to dashboard
       router.push('/dashboard')
+
     } catch (error: any) {
+      console.error('Registration error:', error)
+
       toast({
         title: 'Registration failed',
         description: error.message || 'Please check your information and try again.',
@@ -229,11 +239,10 @@ export default function RegisterPage() {
                         {...register('role')}
                         className="sr-only"
                       />
-                      <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                        selectedRole === 'BUYER'
-                          ? 'border-primary bg-primary/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}>
+                      <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedRole === 'BUYER'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}>
                         <div className="text-center">
                           <div className="text-lg font-semibold mb-1">Buyer</div>
                           <div className="text-sm text-gray-600">Shop from global sellers</div>
@@ -247,11 +256,10 @@ export default function RegisterPage() {
                         {...register('role')}
                         className="sr-only"
                       />
-                      <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                        selectedRole === 'SELLER'
-                          ? 'border-primary bg-primary/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}>
+                      <div className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${selectedRole === 'SELLER'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-gray-200 hover:border-gray-300'
+                        }`}>
                         <div className="text-center">
                           <div className="text-lg font-semibold mb-1">Seller</div>
                           <div className="text-sm text-gray-600">Sell to global customers</div>
@@ -266,9 +274,16 @@ export default function RegisterPage() {
 
                 {/* Terms and Conditions */}
                 <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="acceptTerms"
-                    {...register('acceptTerms')}
+                  <Controller
+                    name="acceptTerms"
+                    control={control}
+                    render={({ field }) => (
+                      <Checkbox
+                        id="acceptTerms"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    )}
                   />
                   <Label htmlFor="acceptTerms" className="text-sm">
                     I agree to the{' '}

@@ -4,7 +4,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -27,10 +27,37 @@ type LoginForm = z.infer<typeof loginSchema>
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login } = useAuth()
+  const searchParams = useSearchParams()
+  const { login, loginWithGoogle } = useAuth()
   const { toast } = useToast()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+
+  // Show verification message if redirected from registration
+  useEffect(() => {
+    const message = searchParams?.get('message')
+    if (message === 'verify_email') {
+      toast({
+        title: 'Email verification required',
+        description: 'Please check your email and click the verification link before signing in.',
+        variant: 'default',
+      })
+    }
+  }, [searchParams, toast])
+
+  const handleGoogleLogin = async () => {
+    try {
+      await loginWithGoogle()
+      // Redirect handled by AuthProvider/useEffect
+      router.push('/dashboard')
+    } catch (error: any) {
+      toast({
+        title: 'Login failed',
+        description: error.message,
+        variant: 'destructive',
+      })
+    }
+  }
 
   const {
     register,
@@ -45,7 +72,7 @@ export default function LoginPage() {
   useEffect(() => {
     const savedEmail = localStorage.getItem('saved_email')
     const rememberMe = localStorage.getItem('remember_me')
-    
+
     if (savedEmail && rememberMe === 'true') {
       setValue('email', savedEmail)
       setValue('remember', true)
@@ -53,10 +80,13 @@ export default function LoginPage() {
   }, [setValue])
 
   const onSubmit = async (data: LoginForm) => {
+    console.log('Login attempt started', { email: data.email });
     setIsLoading(true)
     try {
+      console.log('Calling login function...');
       await login(data)
-      
+      console.log('Login successful!');
+
       // Save credentials if "Remember me" is checked
       if (data.remember) {
         localStorage.setItem('saved_email', data.email)
@@ -65,13 +95,14 @@ export default function LoginPage() {
         localStorage.removeItem('saved_email')
         localStorage.removeItem('remember_me')
       }
-      
+
       toast({
         title: 'Welcome back!',
         description: 'You have successfully logged in.',
       })
       router.push('/dashboard')
     } catch (error: any) {
+      console.error('Login error:', error);
       toast({
         title: 'Login failed',
         description: error.message || 'Please check your credentials and try again.',
@@ -200,7 +231,7 @@ export default function LoginPage() {
 
             {/* Social Login */}
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleGoogleLogin} type="button">
                 <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
                   <path
                     fill="currentColor"

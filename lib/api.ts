@@ -1,12 +1,12 @@
 // API client layer with typed functions for all backend endpoints
 
-import { 
-  User, 
-  Product, 
-  Order, 
-  CartItem, 
-  ProductFilters, 
-  SortOption, 
+import {
+  User,
+  Product,
+  Order,
+  CartItem,
+  ProductFilters,
+  SortOption,
   PaginatedResponse,
   ApiResponse,
   LoginForm,
@@ -42,7 +42,7 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`
-  
+
   const config: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -64,7 +64,7 @@ async function request<T>(
 
   try {
     const response = await fetch(url, config)
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
       throw new ApiError(
@@ -119,6 +119,13 @@ export const authApi = {
 
   logout: async (): Promise<ApiResponse<{ message: string }>> => {
     return request('/auth/logout', { method: 'POST' })
+  },
+
+  sync: async (user: { uid: string; email: string | null; name: string | null; picture: string | null; phone?: string | null }): Promise<ApiResponse<{ token: string; user: User }>> => {
+    return request('/auth/sync', {
+      method: 'POST',
+      body: JSON.stringify(user),
+    })
   },
 }
 
