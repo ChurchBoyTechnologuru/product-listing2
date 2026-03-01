@@ -1,279 +1,411 @@
-# Supabase Authentication Setup Guide
+# Supabase Auth & Storage Configuration
 
-This guide will help you complete the Supabase authentication setup after migrating from Firebase.
+Your product listing application is now configured with **Supabase** for authentication and file storage. This guide explains the setup and how to use it.
 
-## Quick Start
+## ✅ What's Been Set Up
 
-Run the setup helper script to see configuration instructions:
+### Core Configuration
+- **Authentication**: Email/password authentication via Supabase Auth
+- **Storage**: Two public buckets for avatars and product images
+- **Middleware**: Automatic session management and token refresh
+- **Client Integration**: Supabase client for both browser and server operations
+- **User Profiles**: Profiles table with automatic creation on sign-up
 
-```bash
-./scripts/setup-supabase.sh
+### Files Created/Modified
+```
+lib/supabase/
+  ├── client.ts       # Browser client initialization
+  ├── server.ts       # Server client initialization
+  ├── proxy.ts        # Middleware proxy for token refresh
+  └── storage.ts      # File upload/download utilities
+
+lib/auth.tsx           # Updated to use Supabase Auth
+
+middleware.ts          # Session management & token refresh
+
+app/auth/
+  ├── callback/route.ts      # Email confirmation callback
+  └── auth-code-error/page.tsx  # Error handling page
+
+scripts/
+  ├── 001_create_profiles.sql  # Database schema
+  └── 002_setup_storage.sql    # Storage policies
 ```
 
-## Step 1: Get Supabase Credentials
+## Environment Variables
 
-### Create a Supabase Project (if you don't have one)
+All required environment variables are automatically configured via Vercel integration:
 
-1. Go to [https://supabase.com/dashboard](https://supabase.com/dashboard)
-2. Click "New Project"
-3. Fill in project details:
-   - **Name**: Your project name (e.g., "International Marketplace")
-   - **Database Password**: Choose a strong password
-   - **Region**: Select closest to your users
-4. Click "Create new project" and wait for setup to complete
-
-### Get Your API Credentials
-
-1. In your Supabase project dashboard
-2. Go to **Settings** → **API**
-3. You'll see two important values:
-   - **Project URL**: `https://xxxxxxxxxxxxx.supabase.co`
-   - **anon public key**: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`
-
-## Step 2: Add Credentials to .env.local
-
-Add these lines to your `.env.local` file:
-
-```bash
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL="https://your-project-ref.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-public-key-here"
+```
+NEXT_PUBLIC_SUPABASE_URL       # Public Supabase URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY  # Public anonymous key
+SUPABASE_SERVICE_ROLE_KEY      # Private service role key
+SUPABASE_JWT_SECRET            # JWT secret for verification
+POSTGRES_URL                   # Database connection string
 ```
 
-Replace the placeholder values with your actual credentials from Step 1.
+## Database Setup
 
-## Step 3: Configure Supabase Authentication
+### Running Migrations
 
-### Enable Email Authentication
+Execute the SQL scripts in your Supabase SQL Editor:
 
-1. In Supabase dashboard, go to **Authentication** → **Providers**
-2. Find **Email** in the list
-3. Toggle it to **Enabled**
-4. Configure settings:
-   - ✅ Enable email confirmations (recommended)
-   - ✅ Enable email change confirmations (recommended)
-   - Set confirmation email template if needed
-5. Click **Save**
+1. **Create Profiles Table** (`scripts/001_create_profiles.sql`):
+   - Creates `profiles` table linked to `auth.users`
+   - Enables Row-Level Security (RLS)
+   - Creates trigger to auto-create profiles on sign-up
+   - Creates storage buckets (`avatars` and `products`)
 
-### Enable Google OAuth (Optional)
+2. **Setup Storage Policies** (`scripts/002_setup_storage.sql`):
+   - Configures read/write permissions for storage buckets
+   - Public read access to both buckets
+   - Authenticated users can upload
+   - Users can only delete/update their own files
 
-If you want "Sign in with Google" functionality:
+**Steps to run migrations:**
+1. Go to your Supabase project dashboard
+2. Navigate to SQL Editor
+3. Create a new query
+4. Copy content from `scripts/001_create_profiles.sql`
+5. Execute the query
+6. Repeat for `scripts/002_setup_storage.sql`
 
-1. **Get Google OAuth Credentials**:
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select existing
-   - Enable Google+ API
-   - Go to **Credentials** → **Create Credentials** → **OAuth 2.0 Client ID**
-   - Application type: **Web application**
-   - Add authorized redirect URIs:
-     - `https://your-project-ref.supabase.co/auth/v1/callback`
-   - Copy the **Client ID** and **Client Secret**
+## Authentication Flow
 
-2. **Configure in Supabase**:
-   - Go to **Authentication** → **Providers**
-   - Find **Google** and toggle to **Enabled**
-   - Paste your **Client ID** and **Client Secret**
-   - Click **Save**
+### Sign Up
+```tsx
+import { useAuth } from '@/lib/auth'
 
-### Configure Redirect URLs
-
-1. Go to **Authentication** → **URL Configuration**
-2. Under **Redirect URLs**, add:
-   - `http://localhost:3000/auth/callback` (for local development)
-   - `https://yourdomain.com/auth/callback` (for production)
-3. Under **Site URL**, set:
-   - `http://localhost:3000` (for development)
-   - `https://yourdomain.com` (for production)
-4. Click **Save**
-
-## Step 4: Test Authentication
-
-### Start Development Server
-
-```bash
-npm run dev
+function SignUpForm() {
+  const { register } = useAuth()
+  
+  const handleSubmit = async (email, password, name) => {
+    await register({ email, password, name })
+    // User receives confirmation email
+  }
+}
 ```
 
-### Test Registration
+**Process:**
+1. User enters email, password, and name
+2. Account created in Supabase Auth
+3. Profile automatically created via trigger
+4. Confirmation email sent to user
+5. User must confirm email to activate account
 
-1. Navigate to [http://localhost:3000/auth/register](http://localhost:3000/auth/register)
-2. Fill in the registration form:
-   - Name: Test User
-   - Email: test@example.com
-   - Password: TestPassword123!
-3. Click "Create Account"
-4. You should be redirected to the dashboard
+### Login
+```tsx
+import { useAuth } from '@/lib/auth'
 
-### Test Login
-
-1. Navigate to [http://localhost:3000/auth/login](http://localhost:3000/auth/login)
-2. Enter your credentials
-3. Click "Sign In"
-4. You should be redirected to the dashboard
-
-### Test Google OAuth (if configured)
-
-1. Navigate to [http://localhost:3000/auth/login](http://localhost:3000/auth/login)
-2. Click "Sign in with Google"
-3. Complete Google OAuth flow
-4. You should be redirected to the dashboard
-
-### Run Automated Test
-
-```bash
-npx tsx scripts/test-email-auth.ts
+function LoginForm() {
+  const { login } = useAuth()
+  
+  const handleSubmit = async (email, password) => {
+    await login({ email, password })
+    // User is authenticated
+  }
+}
 ```
 
-Expected output:
+**Process:**
+1. User enters credentials
+2. Supabase verifies and creates session
+3. Session stored in HTTP-only cookie (via middleware)
+4. User is authenticated throughout the app
+
+### Protected Routes
+
+Protect pages that require authentication:
+
+```tsx
+import { withAuth } from '@/lib/auth'
+
+function Dashboard() {
+  return <div>Welcome!</div>
+}
+
+export default withAuth(Dashboard)
+
+// For role-based protection:
+export default withAuth(Dashboard, 'SELLER')
 ```
-Supabase Config: { url: 'Present', anonKey: 'Present' }
 
-1. Testing Registration...
-✓ Registration successful!
-  User ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  Email: testXXXXXXXXXX@example.com
+### Using Auth in Components
 
-2. Testing Login...
-✓ Login successful!
-  User ID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  Email: testXXXXXXXXXX@example.com
+**Client Components:**
+```tsx
+'use client'
+
+import { useAuth } from '@/lib/auth'
+
+export function UserMenu() {
+  const { user, logout, isLoading } = useAuth()
+
+  if (isLoading) return <div>Loading...</div>
+  if (!user) return <div>Sign in to continue</div>
+
+  return (
+    <div>
+      <p>Hello, {user.name}</p>
+      <button onClick={() => logout()}>Logout</button>
+    </div>
+  )
+}
 ```
 
-## Step 5: Verify Database Sync
+**Server Components:**
+```tsx
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
-Check that users are being synced to your PostgreSQL database:
+export default async function Dashboard() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
 
-1. After registering/logging in, check your database:
-   ```bash
-   npm run db:studio
-   ```
-2. Look in the `User` table
-3. You should see the new user with:
-   - Email from Supabase
-   - Name from user metadata
-   - Password set to `supabase-managed`
-   - Role set to `BUYER`
+  if (!user) {
+    redirect('/auth/login')
+  }
 
-## Troubleshooting
+  return <div>Welcome, {user.email}!</div>
+}
+```
 
-### "Missing Supabase environment variables" Error
+## File Storage
 
-**Problem**: Application crashes with environment variable error
+### Upload Avatar
+```tsx
+import { uploadAvatar } from '@/lib/supabase/storage'
+import { useAuth } from '@/lib/auth'
 
-**Solution**: 
-- Ensure `.env.local` has both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- Restart the dev server after adding variables
+export function AvatarUpload() {
+  const { user } = useAuth()
 
-### Email Confirmation Not Received
+  const handleFileChange = async (file: File) => {
+    if (!user) return
+    const avatarUrl = await uploadAvatar(file, user.id)
+    // avatarUrl is the public URL of the uploaded file
+  }
 
-**Problem**: User registers but doesn't receive confirmation email
+  return <input type="file" onChange={(e) => handleFileChange(e.target.files?.[0]!)} />
+}
+```
 
-**Solution**:
-- Check Supabase dashboard → Authentication → Email Templates
-- For development, you can disable email confirmation:
-  - Go to Authentication → Providers → Email
-  - Uncheck "Enable email confirmations"
-  - Click Save
+### Upload Product Image
+```tsx
+import { uploadProductImage } from '@/lib/supabase/storage'
 
-### Google OAuth Redirect Error
+export function ProductImageUpload({ productId }: { productId: string }) {
+  const handleFileChange = async (file: File) => {
+    const imageUrl = await uploadProductImage(file, productId)
+    // imageUrl is the public URL of the uploaded file
+  }
 
-**Problem**: OAuth fails with redirect URI mismatch
+  return <input type="file" onChange={(e) => handleFileChange(e.target.files?.[0]!)} />
+}
+```
 
-**Solution**:
-- Verify redirect URL in Google Cloud Console matches exactly:
-  - `https://your-project-ref.supabase.co/auth/v1/callback`
-- Ensure Google provider is enabled in Supabase
-- Check that credentials are correctly entered
+### Get Public File URLs
 
-### User Not Syncing to Database
+All files in public buckets are accessible via:
+```
+https://<supabase-url>/storage/v1/object/public/avatars/<path>
+https://<supabase-url>/storage/v1/object/public/products/<path>
+```
 
-**Problem**: User authenticates in Supabase but doesn't appear in database
+Or use the `getPublicUrl` utility:
+```tsx
+import { getPublicUrl } from '@/lib/supabase/storage'
 
-**Solution**:
-- Check browser console for sync errors
-- Verify backend API is running
-- Check that `JWT_SECRET` is set in `.env.local`
-- Verify database connection string is correct
+const url = getPublicUrl('avatars', 'user-123/avatar-1234567890.jpg')
+```
 
-### Session Not Persisting
+## User Profiles
 
-**Problem**: User gets logged out on page refresh
+User metadata is stored in `auth.users.raw_user_meta_data` and automatically synced to the `profiles` table:
 
-**Solution**:
-- Check browser localStorage for Supabase session
-- Verify `persistSession: true` in `lib/supabase.ts`
-- Clear browser cache and try again
+### Fields
+- `id` - UUID (from auth.users)
+- `email` - User email
+- `name` - Display name
+- `phone` - Phone number
+- `avatar_url` - Avatar image URL
+- `role` - ADMIN, SELLER, or BUYER
+- `created_at` - Account creation timestamp
+- `updated_at` - Last update timestamp
 
-## Additional Configuration
+### Update User Profile
+```tsx
+import { useAuth } from '@/lib/auth'
 
-### Email Templates
+export function EditProfile() {
+  const { updateProfile } = useAuth()
 
-Customize email templates in Supabase:
+  const handleUpdate = async () => {
+    await updateProfile({
+      name: 'John Doe',
+      phone: '+1234567890',
+      avatar: 'https://...'
+    })
+  }
+
+  return <button onClick={handleUpdate}>Update</button>
+}
+```
+
+## Password Reset
+
+```tsx
+import { useAuth } from '@/lib/auth'
+
+export function ForgotPassword() {
+  const { resetPassword } = useAuth()
+
+  const handleReset = async (email: string) => {
+    await resetPassword(email)
+    // User receives password reset email
+  }
+
+  return <button onClick={() => handleReset('user@example.com')}>Reset</button>
+}
+```
+
+The reset link redirects to `/auth/reset-password` where you can implement the password change form.
+
+## Row-Level Security (RLS)
+
+All data is protected with RLS policies:
+
+### Profiles Table
+- Users can view their own profile
+- Users can insert/update/delete only their own profile
+- Admins can view all profiles
+
+### Storage Buckets
+- **avatars bucket**: Publicly readable, authenticated users can upload, users can only delete their own
+- **products bucket**: Publicly readable, authenticated users can upload, users can only delete their own
+
+## Configuration in Supabase Dashboard
+
+### Email Configuration
 1. Go to **Authentication** → **Email Templates**
 2. Customize:
    - Confirmation email
-   - Magic link email
    - Password reset email
    - Email change confirmation
 
-### Row Level Security (RLS)
+### Enable Social Auth (Optional)
+1. Go to **Authentication** → **Providers**
+2. Enable Google/GitHub/etc.
+3. Add OAuth credentials
+4. Add redirect URLs in **URL Configuration**
 
-If you're using Supabase database for storing data:
-1. Go to **Authentication** → **Policies**
-2. Set up RLS policies for your tables
-3. Example policy for user-specific data:
-   ```sql
-   CREATE POLICY "Users can view own data"
-   ON your_table
-   FOR SELECT
-   USING (auth.uid() = user_id);
-   ```
+### Update Redirect URLs
+1. Go to **Authentication** → **URL Configuration**
+2. Add your domain redirect URLs:
+   - Development: `http://localhost:3000`
+   - Production: `https://yourdomain.com`
 
-## Production Deployment
+## Testing
 
-Before deploying to production:
+### Test Sign Up
+1. Navigate to `/auth/sign-up`
+2. Fill in the form with test data
+3. Check email for confirmation link
+4. Click link to activate account
 
-1. **Update Environment Variables**:
-   - Add Supabase credentials to your hosting platform
-   - Update redirect URLs to production domain
+### Test Login
+1. Navigate to `/auth/login`
+2. Use your confirmed email and password
+3. You should be redirected to dashboard
 
-2. **Update Supabase Configuration**:
-   - Add production URL to redirect URLs
-   - Update site URL to production domain
+### Test File Upload
+1. Update your profile avatar
+2. Upload a product image
+3. Verify files appear in Supabase Storage dashboard
 
-3. **Test in Production**:
-   - Test registration flow
-   - Test login flow
-   - Test OAuth flow (if configured)
-   - Verify database sync
+## Common Tasks
 
-## Migration from Firebase
+### Check if User is Authenticated
+```tsx
+const { user, isAuthenticated } = useAuth()
+if (isAuthenticated) {
+  // User is logged in
+}
+```
 
-### Existing Users
+### Get Current User's Data
+```tsx
+import { createClient } from '@/lib/supabase/client'
 
-⚠️ **Important**: Existing Firebase users will need to re-register or reset their password.
+const supabase = createClient()
+const { data: { user } } = await supabase.auth.getUser()
+```
 
-If you need to migrate existing users:
-1. Export users from Firebase Authentication
-2. Use Supabase Management API to import users
-3. Send password reset emails to all users
+### Query User-Specific Data
+```tsx
+const { data, error } = await supabase
+  .from('profiles')
+  .select('*')
+  .eq('id', user.id)
+  .single()
+```
 
-### Data Migration
+### Subscribe to Auth Changes
+```tsx
+const supabase = createClient()
 
-User data in your PostgreSQL database is not affected by this migration. Only the authentication provider has changed.
+const { data: { subscription } } = supabase.auth.onAuthStateChange(
+  (event, session) => {
+    console.log('Auth event:', event)
+    console.log('Session:', session)
+  }
+)
 
-## Support
+// Remember to unsubscribe
+subscription?.unsubscribe()
+```
+
+## Troubleshooting
+
+### Email Not Sent
+- Check **Authentication** → **Email Templates** settings
+- Verify SMTP configuration in Supabase dashboard
+- Check spam folder
+
+### Session Lost on Refresh
+- Verify middleware.ts is properly configured
+- Check browser cookies are enabled
+- Clear browser cache and localStorage
+
+### File Upload Fails
+- Ensure storage buckets exist (`avatars`, `products`)
+- Verify RLS policies allow upload
+- Check file size limits
+
+### RLS Policy Errors
+- Ensure user is authenticated
+- Verify policy conditions match your user's data
+- Check auth.uid() is set correctly
+
+### Email Confirmation Redirect Fails
+- Verify `/auth/callback` route exists
+- Check redirect URLs in **URL Configuration**
+- Ensure code exchange is implemented in callback route
+
+## Next Steps
+
+1. ✅ Set up environment variables (done via Vercel)
+2. ✅ Create Supabase client files (done)
+3. ✅ Configure authentication (done)
+4. ⏳ Run database migrations (run scripts in Supabase SQL Editor)
+5. ⏳ Configure email provider (set up in Supabase dashboard)
+6. ⏳ Test authentication flow (sign up and login)
+7. ⏳ Deploy to production (update redirect URLs)
+
+## References
 
 - [Supabase Documentation](https://supabase.com/docs)
 - [Supabase Auth Guide](https://supabase.com/docs/guides/auth)
+- [Supabase Storage Guide](https://supabase.com/docs/guides/storage)
+- [Next.js Middleware](https://nextjs.org/docs/app/building-your-application/routing/middleware)
 - [Next.js + Supabase](https://supabase.com/docs/guides/getting-started/quickstarts/nextjs)
-
-## Summary
-
-✅ Supabase client configured  
-✅ Authentication methods migrated  
-✅ OAuth callback handler updated  
-✅ Backend sync maintained  
-✅ Build verified  
-
-Your authentication system is now powered by Supabase! 🎉

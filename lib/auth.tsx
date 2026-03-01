@@ -1,22 +1,22 @@
 
-// Authentication context and hooks for Firebase Auth + Supabase Database
+// Authentication context and hooks for Supabase Auth
 
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, LoginForm, RegisterForm } from './types'
-import { supabase } from './supabase'
-import type { User as FirebaseUser } from 'firebase/auth'
+import { createClient } from './supabase/client'
+import { useRouter } from 'next/navigation'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
+  session: Session | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (data: LoginForm) => Promise<void>
   register: (data: RegisterForm) => Promise<void>
-  loginWithGoogle: () => Promise<void>
   logout: () => Promise<void>
-  refreshUser: () => Promise<void>
   updateProfile: (data: { name?: string; phone?: string; avatar?: string }) => Promise<void>
   resetPassword: (email: string) => Promise<void>
 }
@@ -25,166 +25,93 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
+  const supabase = createClient()
 
-  const isAuthenticated = !!user
+  const isAuthenticated = !!session?.user
 
   useEffect(() => {
-    // Initialize Firebase auth listener
     const initAuth = async () => {
-      const { auth } = await import('./firebase')
-      const { onAuthStateChanged } = await import('firebase/auth')
+      try {
+        // Get the current session
+        const {
+          data: { session: initialSession },
+        } = await supabase.auth.getSession()
 
-      // Listen for Firebase auth state changes
-      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-        if (firebaseUser) {
-          console.log('[Auth] Firebase user detected:', firebaseUser.email)
-          await syncUserToDatabase(firebaseUser)
-        } else {
-          console.log('[Auth] No Firebase user, clearing state')
-          setUser(null)
-          setIsLoading(false)
+        setSession(initialSession)
+
+        if (initialSession?.user) {
+          console.log('[Auth] Session found for:', initialSession.user.email)
+          // You can sync user metadata here if needed
+          const userData: User = {
+            id: initialSession.user.id,
+            email: initialSession.user.email || '',
+            name: initialSession.user.user_metadata?.name || initialSession.user.email?.split('@')[0] || '',
+            avatar: initialSession.user.user_metadata?.avatar || null,
+            phone: initialSession.user.user_metadata?.phone || null,
+            role: initialSession.user.user_metadata?.role || 'BUYER',
+            isEmailVerified: initialSession.user.email_confirmed_at !== null,
+          }
+          setUser(userData)
         }
-      })
-
-      return unsubscribe
+      } catch (error) {
+        console.error('[Auth] Init error:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
 
     initAuth()
-  }, [])
 
-  // Sync Firebase user to Supabase database
-  const syncUserToDatabase = async (firebaseUser: FirebaseUser) => {
-    try {
-      console.log('[Auth] Syncing user to database:', firebaseUser.email)
+    // Subscribe to auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
+      console.log('[Auth] Auth state changed:', _event)
+      setSession(newSession)
 
-      // Query user from Supabase database
-      const { data: dbUser, error: queryError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', firebaseUser.email)
-        .single()
-
-      // If user doesn't exist, create them
-      if (queryError && queryError.code === 'PGRST116') {
-        console.log('[Auth] User not found in DB, creating new user')
-
-        const newUserData = {
-          email: firebaseUser.email!,
-          name: firebaseUser.displayName || firebaseUser.email!.split('@')[0],
-          password: 'firebase-managed', // Placeholder, actual auth is in Firebase
-          avatar: firebaseUser.photoURL || null,
-          phone: firebaseUser.phoneNumber || null,
-          role: 'BUYER',
-          isEmailVerified: firebaseUser.emailVerified,
+      if (newSession?.user) {
+        const userData: User = {
+          id: newSession.user.id,
+          email: newSession.user.email || '',
+          name: newSession.user.user_metadata?.name || newSession.user.email?.split('@')[0] || '',
+          avatar: newSession.user.user_metadata?.avatar || null,
+          phone: newSession.user.user_metadata?.phone || null,
+          role: newSession.user.user_metadata?.role || 'BUYER',
+          isEmailVerified: newSession.user.email_confirmed_at !== null,
         }
-
-        const { data: newUser, error: createError } = await supabase
-          .from('users')
-          .insert(newUserData)
-          .select()
-          .single()
-
-        if (createError) {
-          console.error('[Auth] Error creating user:', createError)
-          throw createError
-        }
-
-        console.log('[Auth] New user created successfully')
-        setUser(newUser as User)
-      } else if (queryError) {
-        console.error('[Auth] Error querying user:', queryError)
-        throw queryError
+        setUser(userData)
       } else {
-        console.log('[Auth] User found in DB, checking for updates')
-
-        // Check if we need to update user data from Firebase
-        const updates: any = {}
-
-        if (firebaseUser.displayName && firebaseUser.displayName !== dbUser.name) {
-          updates.name = firebaseUser.displayName
-        }
-        if (firebaseUser.photoURL !== undefined && firebaseUser.photoURL !== dbUser.avatar) {
-          updates.avatar = firebaseUser.photoURL
-        }
-        if (firebaseUser.emailVerified !== dbUser.isEmailVerified) {
-          updates.isEmailVerified = firebaseUser.emailVerified
-        }
-
-        // Update if there are changes
-        if (Object.keys(updates).length > 0) {
-          console.log('[Auth] Updating user with Firebase data:', updates)
-          const { data: updatedUser, error: updateError } = await supabase
-            .from('users')
-            .update(updates)
-            .eq('email', firebaseUser.email)
-            .select()
-            .single()
-
-          if (updateError) {
-            console.error('[Auth] Error updating user:', updateError)
-            setUser(dbUser as User)
-          } else {
-            setUser(updatedUser as User)
-          }
-        } else {
-          setUser(dbUser as User)
-        }
+        setUser(null)
       }
-    } catch (error) {
-      console.error('[Auth] Sync error:', error)
-      setUser(null)
-    } finally {
-      setIsLoading(false)
+    })
+
+    return () => {
+      subscription?.unsubscribe()
     }
-  }
-
-  const refreshUser = async () => {
-    try {
-      const { auth } = await import('./firebase')
-      const firebaseUser = auth.currentUser
-
-      if (firebaseUser?.email) {
-        // Query user directly from Supabase database
-        const { data: dbUser, error } = await supabase
-          .from('users')
-          .select('*')
-          .eq('email', firebaseUser.email)
-          .single()
-
-        if (error) throw error
-        setUser(dbUser as User)
-      }
-    } catch (error) {
-      console.error('[Auth] Refresh error:', error)
-    }
-  }
+  }, [supabase])
 
   const login = async (data: LoginForm) => {
     try {
       console.log('[Auth] Attempting login for:', data.email)
 
-      const { auth } = await import('./firebase')
-      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { error, data: authData } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.password,
+      })
 
-      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password)
-      console.log('[Auth] Firebase login successful:', userCredential.user.email)
+      if (error) throw error
 
-      // User will be synced via onAuthStateChanged listener
+      console.log('[Auth] Login successful:', authData.user?.email)
     } catch (error: any) {
       console.error('[Auth] Login error:', error)
 
-      // Handle Firebase-specific errors
-      if (error.code === 'auth/user-not-found') {
-        throw new Error('No account found with this email')
-      } else if (error.code === 'auth/wrong-password') {
-        throw new Error('Incorrect password')
-      } else if (error.code === 'auth/invalid-email') {
-        throw new Error('Invalid email address')
-      } else if (error.code === 'auth/user-disabled') {
-        throw new Error('This account has been disabled')
-      } else if (error.code === 'auth/too-many-requests') {
-        throw new Error('Too many failed login attempts. Please try again later')
+      if (error.message?.includes('Invalid login credentials')) {
+        throw new Error('Invalid email or password')
+      } else if (error.message?.includes('Email not confirmed')) {
+        throw new Error('Please confirm your email address before logging in')
       }
 
       throw new Error(error.message || 'Login failed')
@@ -195,79 +122,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('[Auth] Starting registration for:', data.email)
 
-      const { auth } = await import('./firebase')
-      const { createUserWithEmailAndPassword, updateProfile } = await import('firebase/auth')
-
-      // Create user in Firebase Auth
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password)
-      console.log('[Auth] Firebase user created:', userCredential.user.email)
-
-      // Update Firebase profile with display name
-      await updateProfile(userCredential.user, {
-        displayName: data.name,
+      const { error, data: authData } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
+            role: 'BUYER',
+          },
+          emailRedirectTo:
+            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
+            `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+        },
       })
-      console.log('[Auth] Firebase profile updated with name')
 
-      // User will be synced to database via onAuthStateChanged listener
-      console.log('[Auth] Registration completed successfully')
+      if (error) throw error
+
+      console.log('[Auth] Registration successful, confirmation email sent')
     } catch (error: any) {
       console.error('[Auth] Registration error:', error)
 
-      // Handle Firebase-specific errors
-      if (error.code === 'auth/email-already-in-use') {
+      if (error.message?.includes('already registered')) {
         throw new Error('An account with this email already exists')
-      } else if (error.code === 'auth/invalid-email') {
-        throw new Error('Invalid email address')
-      } else if (error.code === 'auth/weak-password') {
-        throw new Error('Password is too weak. Please use at least 6 characters')
-      } else if (error.code === 'auth/operation-not-allowed') {
-        throw new Error('Email/password accounts are not enabled. Please contact support')
+      } else if (error.message?.includes('password')) {
+        throw new Error('Password is too weak. Use at least 8 characters')
       }
 
       throw new Error(error.message || 'Registration failed')
     }
   }
 
-  const loginWithGoogle = async () => {
-    try {
-      console.log('[Auth] Starting Google login with Firebase...')
-
-      const { auth, googleProvider } = await import('./firebase')
-      const { signInWithPopup } = await import('firebase/auth')
-
-      // Sign in with Google using Firebase popup
-      const result = await signInWithPopup(auth, googleProvider)
-      console.log('[Auth] Firebase Google sign-in successful:', result.user.email)
-
-      // User will be synced to database via onAuthStateChanged listener
-      console.log('[Auth] Google login completed successfully')
-    } catch (error: any) {
-      console.error('[Auth] Google login error:', error)
-
-      // Handle specific Firebase errors
-      if (error.code === 'auth/popup-closed-by-user') {
-        throw new Error('Sign-in cancelled')
-      } else if (error.code === 'auth/popup-blocked') {
-        throw new Error('Popup blocked by browser. Please allow popups for this site.')
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        throw new Error('Sign-in cancelled')
-      } else if (error.message?.includes('Missing Firebase configuration')) {
-        throw new Error('Google Sign-In is not configured. Please contact support.')
-      }
-
-      throw new Error(error.message || 'Google login failed')
-    }
-  }
-
   const logout = async () => {
     try {
       console.log('[Auth] Logging out...')
-      const { auth } = await import('./firebase')
-      const { signOut } = await import('firebase/auth')
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
 
-      await signOut(auth)
       setUser(null)
+      setSession(null)
       console.log('[Auth] Logout successful')
+      router.push('/auth/login')
     } catch (error) {
       console.error('[Auth] Logout error:', error)
       throw error
@@ -278,36 +172,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('[Auth] Updating profile with:', data)
 
-      const { auth } = await import('./firebase')
-      const { updateProfile: updateFirebaseProfile } = await import('firebase/auth')
-      const firebaseUser = auth.currentUser
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          name: data.name,
+          phone: data.phone,
+          avatar: data.avatar,
+        },
+      })
 
-      if (!firebaseUser?.email) {
-        throw new Error('No authenticated user')
-      }
-
-      // Update Firebase profile if name or avatar changed
-      const firebaseUpdates: any = {}
-      if (data.name !== undefined) firebaseUpdates.displayName = data.name
-      if (data.avatar !== undefined) firebaseUpdates.photoURL = data.avatar
-
-      if (Object.keys(firebaseUpdates).length > 0) {
-        await updateFirebaseProfile(firebaseUser, firebaseUpdates)
-        console.log('[Auth] Firebase profile updated')
-      }
-
-      // Update Supabase database
-      const { data: updatedUser, error: updateError } = await supabase
-        .from('users')
-        .update(data)
-        .eq('email', firebaseUser.email)
-        .select()
-        .single()
-
-      if (updateError) throw updateError
+      if (error) throw error
 
       // Update local user state
-      setUser(updatedUser as User)
+      setUser((prevUser) =>
+        prevUser
+          ? {
+              ...prevUser,
+              name: data.name ?? prevUser.name,
+              phone: data.phone ?? prevUser.phone,
+              avatar: data.avatar ?? prevUser.avatar,
+            }
+          : null
+      )
+
       console.log('[Auth] Profile updated successfully')
     } catch (error: any) {
       console.error('[Auth] Profile update error:', error)
@@ -319,37 +205,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('[Auth] Sending password reset email to:', email)
 
-      const { auth } = await import('./firebase')
-      const { sendPasswordResetEmail } = await import('firebase/auth')
-
-      await sendPasswordResetEmail(auth, email, {
-        url: `${window.location.origin}/auth/login`,
-        handleCodeInApp: false,
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo:
+          typeof window !== 'undefined'
+            ? `${window.location.origin}/auth/reset-password`
+            : undefined,
       })
+
+      if (error) throw error
 
       console.log('[Auth] Password reset email sent')
     } catch (error: any) {
       console.error('[Auth] Password reset error:', error)
-
-      if (error.code === 'auth/user-not-found') {
-        throw new Error('No account found with this email')
-      } else if (error.code === 'auth/invalid-email') {
-        throw new Error('Invalid email address')
-      }
-
       throw new Error(error.message || 'Failed to send password reset email')
     }
   }
 
   const value: AuthContextType = {
     user,
+    session,
     isLoading,
     isAuthenticated,
     login,
     register,
-    loginWithGoogle,
     logout,
-    refreshUser,
     updateProfile,
     resetPassword,
   }
