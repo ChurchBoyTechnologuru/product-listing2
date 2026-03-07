@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -448,9 +449,11 @@ export default function NewProductPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {images.map((image) => (
                   <div key={image.id} className="relative group">
-                    <img
+                    <Image
                       src={image.preview}
                       alt="Product preview"
+                      width={128}
+                      height={128}
                       className="w-full h-32 object-cover rounded-lg"
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center space-x-2">

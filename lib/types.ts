@@ -12,13 +12,13 @@ export interface User {
   id: string
   email: string
   name: string
-  password: string
+  password?: string // Optional for Supabase auth
   role: Role
   avatar?: string
   phone?: string
   isEmailVerified: boolean
-  createdAt: string
-  updatedAt: string
+  createdAt?: string // Optional for Supabase auth
+  updatedAt?: string // Optional for Supabase auth
   // Seller specific fields
   shop?: Shop
   verificationState?: VerificationState
