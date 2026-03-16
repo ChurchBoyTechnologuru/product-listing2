@@ -35,6 +35,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        // Check if Supabase is configured
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+          console.warn('[Auth] Supabase not configured. Running in demo mode.')
+          setIsLoading(false)
+          return
+        }
+
         // Get the current session
         const {
           data: { session: initialSession },
