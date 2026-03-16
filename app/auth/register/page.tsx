@@ -34,6 +34,23 @@ const registerSchema = z.object({
 
 type RegisterForm = z.infer<typeof registerSchema>
 
+const roleBenefits = {
+  BUYER: [
+    'Browse millions of products worldwide',
+    'Secure checkout with multiple payment options',
+    'Track your orders in real-time',
+    'Access buyer protection guarantee',
+    'Get exclusive deals and discounts',
+  ],
+  SELLER: [
+    'Reach millions of buyers globally',
+    'Manage inventory and listings easily',
+    'Access detailed analytics and reports',
+    'Secure payment processing',
+    'Dedicated seller support team',
+  ],
+}
+
 export default function RegisterPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
