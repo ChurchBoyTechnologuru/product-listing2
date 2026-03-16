@@ -1,69 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+import { loginUser } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, remember } = await request.json()
+    const { email, password } = await request.json()
 
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: {
-        shop: true,
-        businessInfo: true,
-        bankDetails: true,
-      },
-    })
-
-    if (!user) {
+    if (!email || !password) {
       return NextResponse.json(
-        { success: false, message: 'Invalid credentials' },
-        { status: 401 }
+        { error: 'Email and password are required' },
+        { status: 400 }
       )
     }
 
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password)
-    if (!isValidPassword) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid credentials' },
-        { status: 401 }
-      )
-    }
+    const { sessionId, user } = loginUser(email, password)
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email, 
-        role: user.role 
-      },
-      JWT_SECRET,
-      { 
-        expiresIn: remember ? '30d' : '24h' 
-      }
+    const response = NextResponse.json(
+      { user },
+      { status: 200 }
     )
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        token,
-        user: userWithoutPassword,
-      },
+    // Set session cookie (HTTP-only)
+    response.cookies.set({
+      name: 'session_id',
+      value: sessionId,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60, // 24 hours
+      path: '/',
     })
-  } catch (error) {
-    console.error('Login error:', error)
+
+    return response
+  } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
+      { error: error.message || 'Login failed' },
+      { status: 401 }
     )
   }
 }

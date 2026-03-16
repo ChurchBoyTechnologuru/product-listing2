@@ -1,67 +1,46 @@
 
-// Authentication context and hooks for Supabase Auth
+// Standalone custom authentication context (no external dependencies)
 
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, LoginForm, RegisterForm } from './types'
-import { createClient } from './supabase/client'
 import { useRouter } from 'next/navigation'
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null
-  session: Session | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (data: LoginForm) => Promise<void>
   register: (data: RegisterForm) => Promise<void>
   logout: () => Promise<void>
   updateProfile: (data: { name?: string; phone?: string; avatar?: string }) => Promise<void>
-  resetPassword: (email: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
-  const isAuthenticated = !!session?.user
+  const isAuthenticated = !!user
 
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Check if Supabase is configured
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-          console.warn('[Auth] Supabase not configured. Running in demo mode.')
-          setIsLoading(false)
-          return
-        }
+        // Check session from backend
+        const response = await fetch('/api/auth/session', {
+          method: 'GET',
+          credentials: 'include',
+        })
 
-        // Get the current session
-        const {
-          data: { session: initialSession },
-        } = await supabase.auth.getSession()
-
-        setSession(initialSession)
-
-        if (initialSession?.user) {
-          console.log('[Auth] Session found for:', initialSession.user.email)
-          // You can sync user metadata here if needed
-          const userData: User = {
-            id: initialSession.user.id,
-            email: initialSession.user.email || '',
-            name: initialSession.user.user_metadata?.name || initialSession.user.email?.split('@')[0] || '',
-            avatar: initialSession.user.user_metadata?.avatar || null,
-            phone: initialSession.user.user_metadata?.phone || null,
-            role: initialSession.user.user_metadata?.role || 'BUYER',
-            isEmailVerified: initialSession.user.email_confirmed_at !== null,
+        if (response.ok) {
+          const { user: sessionUser } = await response.json()
+          if (sessionUser) {
+            console.log('[Auth] Session found for:', sessionUser.email)
+            setUser(sessionUser)
           }
-          setUser(userData)
         }
       } catch (error) {
         console.error('[Auth] Init error:', error)
@@ -71,57 +50,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     initAuth()
-
-    // Subscribe to auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event: AuthChangeEvent, newSession: Session | null) => {
-      console.log('[Auth] Auth state changed:', _event)
-      setSession(newSession)
-
-      if (newSession?.user) {
-        const userData: User = {
-          id: newSession.user.id,
-          email: newSession.user.email || '',
-          name: newSession.user.user_metadata?.name || newSession.user.email?.split('@')[0] || '',
-          avatar: newSession.user.user_metadata?.avatar || null,
-          phone: newSession.user.user_metadata?.phone || null,
-          role: newSession.user.user_metadata?.role || 'BUYER',
-          isEmailVerified: newSession.user.email_confirmed_at !== null,
-        }
-        setUser(userData)
-      } else {
-        setUser(null)
-      }
-    })
-
-    return () => {
-      subscription?.unsubscribe()
-    }
-  }, [supabase])
+  }, [])
 
   const login = async (data: LoginForm) => {
     try {
       console.log('[Auth] Attempting login for:', data.email)
 
-      const { error, data: authData } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: data.password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
       })
 
-      if (error) throw error
-
-      console.log('[Auth] Login successful:', authData.user?.email)
-    } catch (error: any) {
-      console.error('[Auth] Login error:', error)
-
-      if (error.message?.includes('Invalid login credentials')) {
-        throw new Error('Invalid email or password')
-      } else if (error.message?.includes('Email not confirmed')) {
-        throw new Error('Please confirm your email address before logging in')
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Login failed')
       }
 
-      throw new Error(error.message || 'Login failed')
+      const { user: loginUser } = await response.json()
+      setUser(loginUser)
+      console.log('[Auth] Login successful:', loginUser.email)
+      router.push('/dashboard')
+    } catch (error: any) {
+      console.error('[Auth] Login error:', error)
+      throw error
     }
   }
 
@@ -129,44 +87,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('[Auth] Starting registration for:', data.email)
 
-      const { error, data: authData } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            name: data.name,
-            role: 'BUYER',
-          },
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
-            `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/callback`,
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+          name: data.name,
+        }),
       })
 
-      if (error) throw error
-
-      console.log('[Auth] Registration successful, confirmation email sent')
-    } catch (error: any) {
-      console.error('[Auth] Registration error:', error)
-
-      if (error.message?.includes('already registered')) {
-        throw new Error('An account with this email already exists')
-      } else if (error.message?.includes('password')) {
-        throw new Error('Password is too weak. Use at least 8 characters')
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || 'Registration failed')
       }
 
-      throw new Error(error.message || 'Registration failed')
+      console.log('[Auth] Registration successful')
+      // Auto-login after registration
+      await login(data)
+    } catch (error: any) {
+      console.error('[Auth] Registration error:', error)
+      throw error
     }
   }
 
   const logout = async () => {
     try {
       console.log('[Auth] Logging out...')
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      })
 
       setUser(null)
-      setSession(null)
       console.log('[Auth] Logout successful')
       router.push('/auth/login')
     } catch (error) {
@@ -179,17 +135,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('[Auth] Updating profile with:', data)
 
-      const { error } = await supabase.auth.updateUser({
-        data: {
-          name: data.name,
-          phone: data.phone,
-          avatar: data.avatar,
-        },
-      })
+      if (!user) {
+        throw new Error('No user logged in')
+      }
 
-      if (error) throw error
-
-      // Update local user state
+      // Update user state locally
       setUser((prevUser) =>
         prevUser
           ? {
@@ -208,36 +158,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const resetPassword = async (email: string) => {
-    try {
-      console.log('[Auth] Sending password reset email to:', email)
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo:
-          typeof window !== 'undefined'
-            ? `${window.location.origin}/auth/reset-password`
-            : undefined,
-      })
-
-      if (error) throw error
-
-      console.log('[Auth] Password reset email sent')
-    } catch (error: any) {
-      console.error('[Auth] Password reset error:', error)
-      throw new Error(error.message || 'Failed to send password reset email')
-    }
-  }
-
   const value: AuthContextType = {
     user,
-    session,
     isLoading,
     isAuthenticated,
     login,
     register,
     logout,
     updateProfile,
-    resetPassword,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
