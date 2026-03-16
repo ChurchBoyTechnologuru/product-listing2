@@ -1,58 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+import { getUser } from '@/lib/auth-utils'
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const sessionId = request.cookies.get('session_id')?.value
+
+    if (!sessionId) {
       return NextResponse.json(
-        { success: false, message: 'No token provided' },
+        { error: 'No session found' },
         { status: 401 }
       )
     }
 
-    const token = authHeader.substring(7)
-    
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-      
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        include: {
-          shop: true,
-          businessInfo: true,
-          bankDetails: true,
-        },
-      })
+    const user = getUser(sessionId)
 
-      if (!user) {
-        return NextResponse.json(
-          { success: false, message: 'User not found' },
-          { status: 404 }
-        )
-      }
-
-      // Remove password from response
-      const { password: _, ...userWithoutPassword } = user
-
-      return NextResponse.json({
-        success: true,
-        data: userWithoutPassword,
-      })
-    } catch (jwtError) {
+    if (!user) {
       return NextResponse.json(
-        { success: false, message: 'Invalid token' },
+        { error: 'Session expired or invalid' },
         { status: 401 }
       )
     }
+
+    return NextResponse.json({ user })
   } catch (error) {
     console.error('Get user error:', error)
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

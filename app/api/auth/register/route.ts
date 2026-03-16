@@ -1,75 +1,40 @@
 import { NextRequest, NextResponse } from 'next/server'
-import bcrypt from 'bcryptjs'
-import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+import { registerUser } from '@/lib/auth-utils'
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, password, role, acceptTerms } = await request.json()
+    const { name, email, password, role } = await request.json()
 
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    })
-
-    if (existingUser) {
+    if (!email || !password || !name) {
       return NextResponse.json(
-        { success: false, message: 'User already exists with this email' },
+        { error: 'Email, password, and name are required' },
         { status: 400 }
       )
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
+    const { sessionId, user } = registerUser(email, password, name, (role as 'BUYER' | 'SELLER') || 'BUYER')
 
-    // Validate role
-    if (role && !['BUYER', 'SELLER'].includes(role)) {
-      return NextResponse.json(
-        { success: false, message: 'Invalid role specified' },
-        { status: 400 }
-      )
-    }
-
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: (role as 'BUYER' | 'SELLER') || 'BUYER',
-        isEmailVerified: false,
-      },
-    })
-
-    // Generate JWT token
-    const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email, 
-        role: user.role 
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
+    const response = NextResponse.json(
+      { user },
+      { status: 201 }
     )
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        token,
-        user: userWithoutPassword,
-      },
+    // Set session cookie (HTTP-only)
+    response.cookies.set({
+      name: 'session_id',
+      value: sessionId,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 24 * 60 * 60, // 24 hours
+      path: '/',
     })
-  } catch (error) {
-    console.error('Registration error:', error)
+
+    return response
+  } catch (error: any) {
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
-      { status: 500 }
+      { error: error.message || 'Registration failed' },
+      { status: 400 }
     )
   }
 }

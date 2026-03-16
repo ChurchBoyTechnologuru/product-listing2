@@ -1,25 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server'
-import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
-
-// Helper function to verify JWT token
-async function verifyToken(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return null
-  }
-
-  const token = authHeader.substring(7)
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-    return decoded.userId
-  } catch {
-    return null
-  }
-}
+// Mock products data - standalone demo
+const mockProducts = [
+  {
+    id: '1',
+    title: 'Wireless Headphones',
+    description: 'High-quality wireless headphones with noise cancellation',
+    price: 199.99,
+    currency: 'USD',
+    category: 'Electronics',
+    stock: 50,
+    tags: ['audio', 'wireless', 'headphones'],
+    isService: false,
+    images: [{ url: '/products/headphones.jpg', alt: 'Wireless Headphones', isPrimary: true }],
+    shopId: 'shop-1',
+    rating: 4.5,
+    reviews: 128,
+  },
+  {
+    id: '2',
+    title: 'Professional Logo Design',
+    description: 'Custom logo design for your business',
+    price: 499.99,
+    currency: 'USD',
+    category: 'Services',
+    stock: 0,
+    tags: ['design', 'logo', 'branding'],
+    isService: true,
+    images: [{ url: '/products/design.jpg', alt: 'Logo Design', isPrimary: true }],
+    shopId: 'shop-2',
+    rating: 4.8,
+    reviews: 45,
+  },
+  {
+    id: '3',
+    title: 'Vintage Leather Jacket',
+    description: 'Authentic vintage leather jacket in excellent condition',
+    price: 149.99,
+    currency: 'USD',
+    category: 'Fashion',
+    stock: 10,
+    tags: ['vintage', 'leather', 'fashion'],
+    isService: false,
+    images: [{ url: '/products/jacket.jpg', alt: 'Leather Jacket', isPrimary: true }],
+    shopId: 'shop-3',
+    rating: 4.7,
+    reviews: 67,
+  },
+]
 
 // GET /api/products - Get all products with filters
 export async function GET(request: NextRequest) {
@@ -29,58 +57,37 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20')
     const category = searchParams.get('category')
     const search = searchParams.get('search')
-    const minPrice = searchParams.get('minPrice')
-    const maxPrice = searchParams.get('maxPrice')
-    const isService = searchParams.get('isService')
+    const minPrice = parseFloat(searchParams.get('minPrice') || '0')
+    const maxPrice = parseFloat(searchParams.get('maxPrice') || '999999')
 
-    const skip = (page - 1) * limit
+    let filtered = mockProducts
 
-    const where: any = {
-      isActive: true,
-    }
-
+    // Filter by category
     if (category) {
-      where.category = category
+      filtered = filtered.filter(p => p.category === category)
     }
 
+    // Filter by search
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
-        { tags: { has: search } },
-      ]
+      const searchLower = search.toLowerCase()
+      filtered = filtered.filter(p =>
+        p.title.toLowerCase().includes(searchLower) ||
+        p.description.toLowerCase().includes(searchLower) ||
+        p.tags.some(tag => tag.toLowerCase().includes(searchLower))
+      )
     }
 
-    if (minPrice || maxPrice) {
-      where.price = {}
-      if (minPrice) where.price.gte = parseFloat(minPrice)
-      if (maxPrice) where.price.lte = parseFloat(maxPrice)
-    }
+    // Filter by price
+    filtered = filtered.filter(p => p.price >= minPrice && p.price <= maxPrice)
 
-    if (isService !== null) {
-      where.isService = isService === 'true'
-    }
-
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        skip,
-        take: limit,
-        include: {
-          shop: true,
-          images: true,
-          reviews: true,
-          shippingOptions: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.product.count({ where }),
-    ])
+    const total = filtered.length
+    const start = (page - 1) * limit
+    const data = filtered.slice(start, start + limit)
 
     return NextResponse.json({
       success: true,
       data: {
-        data: products,
+        data,
         total,
         page,
         limit,
@@ -96,27 +103,15 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/products - Create new product
+// POST /api/products - Create new product (demo - just returns mock)
 export async function POST(request: NextRequest) {
   try {
-    const userId = await verifyToken(request)
-    if (!userId) {
+    const sessionId = request.cookies.get('session_id')?.value
+
+    if (!sessionId) {
       return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
+        { error: 'Unauthorized' },
         { status: 401 }
-      )
-    }
-
-    // Check if user has a shop
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { shop: true },
-    })
-
-    if (!user?.shop) {
-      return NextResponse.json(
-        { success: false, message: 'You need to create a shop first' },
-        { status: 400 }
       )
     }
 
@@ -125,69 +120,35 @@ export async function POST(request: NextRequest) {
       title,
       description,
       price,
-      currency = 'USD',
       category,
-      subcategory,
-      stock = 0,
-      sku,
-      weight,
-      dimensions,
       tags = [],
-      images = [],
-      shippingOptions = [],
-      isService = false,
     } = body
 
-    // Create product
-    const product = await prisma.product.create({
-      data: {
-        title,
-        description,
-        price: parseFloat(price),
-        currency,
-        category,
-        subcategory,
-        stock: parseInt(stock),
-        sku,
-        weight: weight ? parseFloat(weight) : null,
-        dimensions: dimensions ? JSON.parse(JSON.stringify(dimensions)) : null,
-        tags,
-        isService,
-        shopId: user.shop.id,
-        images: {
-          create: images.map((imageUrl: string, index: number) => ({
-            url: imageUrl,
-            alt: `${title} image ${index + 1}`,
-            isPrimary: index === 0,
-            order: index,
-          })),
-        },
-        shippingOptions: {
-          create: shippingOptions.map((option: any) => ({
-            name: option.name,
-            price: parseFloat(option.price),
-            currency: option.currency || currency,
-            estimatedDays: parseInt(option.estimatedDays),
-            countries: option.countries || [],
-            isInternational: option.isInternational || false,
-          })),
-        },
-      },
-      include: {
-        shop: true,
-        images: true,
-        shippingOptions: true,
-      },
-    })
+    // Return mock product (in production, save to database)
+    const newProduct = {
+      id: Math.random().toString(),
+      title,
+      description,
+      price: parseFloat(price),
+      currency: 'USD',
+      category,
+      stock: 0,
+      tags,
+      isService: false,
+      images: [],
+      shopId: 'demo-shop',
+      rating: 0,
+      reviews: 0,
+    }
 
     return NextResponse.json({
       success: true,
-      data: product,
+      data: newProduct,
     })
   } catch (error) {
     console.error('Create product error:', error)
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
